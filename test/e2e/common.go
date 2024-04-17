@@ -11,8 +11,10 @@ import (
 
 	"github.com/pkg/errors"
 
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,11 +23,10 @@ import (
 	metal3api "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	testexec "sigs.k8s.io/cluster-api/test/framework/exec"
 
-	capm3_e2e "github.com/metal3-io/cluster-api-provider-metal3/test/e2e"
-
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/cluster-api/test/framework"
 
+	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
@@ -225,9 +226,9 @@ func IsBootedFromDisk(client *ssh.Client) (bool, error) {
 
 	bootedFromDisk := HasRootOnDisk(output)
 	if bootedFromDisk {
-		capm3_e2e.Logf("System is booted from a disk.")
+		Logf("System is booted from a disk.")
 	} else {
-		capm3_e2e.Logf("System is booted from a live ISO.")
+		Logf("System is booted from a live ISO.")
 	}
 
 	return bootedFromDisk, nil
@@ -422,4 +423,25 @@ func BuildAndRemoveKustomization(ctx context.Context, kustomization string, clus
 		return err
 	}
 	return KubectlDelete(ctx, clusterProxy.GetKubeconfigPath(), manifest)
+}
+
+// AnnotateBmh annotates BaremetalHost with a given key and value.
+func AnnotateBmh(ctx context.Context, client client.Client, host bmov1alpha1.BareMetalHost, key string, value *string) {
+	helper, err := patch.NewHelper(&host, client)
+	Expect(err).NotTo(HaveOccurred())
+	annotations := host.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	if value == nil {
+		delete(annotations, key)
+	} else {
+		annotations[key] = *value
+	}
+	host.SetAnnotations(annotations)
+	Expect(helper.Patch(ctx, &host)).To(Succeed())
+}
+
+func Logf(format string, a ...interface{}) {
+	fmt.Fprintf(GinkgoWriter, "INFO: "+format+"\n", a...)
 }
